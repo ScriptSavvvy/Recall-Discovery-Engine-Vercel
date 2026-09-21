@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Recall | Photo Retrieval Discovery",
-  description: "Explore source-backed evidence of photo retrieval with incomplete memory.",
+  description: "Analyse structured photo-retrieval episodes, compare problem mechanisms, and inspect evidence-grounded opportunity areas.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",

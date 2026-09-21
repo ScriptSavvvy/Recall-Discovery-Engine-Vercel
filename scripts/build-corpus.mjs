@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const root=process.cwd();
-const csv=fs.readFileSync(path.join(root,'data','corpus.csv'),'utf8');
+const csv=fs.readFileSync(path.join(root,'data','corpus.csv'),'utf8').replace(/^\uFEFF/,'');
 
 function parseCSV(text){
   const rows=[];let row=[],cell='',quoted=false;
@@ -10,80 +10,23 @@ function parseCSV(text){
     const ch=text[i];
     if(ch==='"'){if(quoted&&text[i+1]==='"'){cell+='"';i++;}else quoted=!quoted;}
     else if(ch===','&&!quoted){row.push(cell);cell='';}
-    else if((ch==='\n'||ch==='\r')&&!quoted){if(ch==='\r'&&text[i+1]==='\n')i++;row.push(cell);if(row.some(Boolean))rows.push(row);row=[];cell='';}
+    else if((ch==='\n'||ch==='\r')&&!quoted){if(ch==='\r'&&text[i+1]==='\n')i++;row.push(cell);if(row.some(value=>value.trim()))rows.push(row);row=[];cell='';}
     else cell+=ch;
   }
-  if(cell||row.length){row.push(cell);rows.push(row);}
-  const headers=rows.shift()||[];
-  return rows.map(values=>Object.fromEntries(headers.map((h,i)=>[h.trim(),(values[i]||'').trim()])));
+  if(cell||row.length){row.push(cell);rows.push(row);}return rows;
 }
 
-const placeholder=/example|support\.google\.com\/photos\/thread\/1000000\d|discussions\.apple\.com\/thread\/25400000\d|x\.com\/user\/status\/170000000\d/i;
-const original=parseCSV(csv).map((r,i)=>({
-  id:r.ID||`R${String(i+1).padStart(3,'0')}`,
-  platform:r.Platform,
-  appSystem:r.App_System,
-  category:r.Failure_Category,
-  text:r.Verbatim_Quote,
-  sourceUrl:r.Direct_Thread_Link,
-  origin:placeholder.test(r.Direct_Thread_Link)?'synthetic-showcase':'source-linked'
-}));
+const raw=parseCSV(csv);const headers=raw.shift();
+if(!headers||raw.length!==300)throw new Error(`Expected 300 data rows, received ${raw.length}`);
 
-const targets={
-  'Keyword & Vocabulary Gap':250,
-  'Metadata Corruption':130,
-  'Episodic/Context Blindness':180,
-  'Thumbnail Fatigue & Endless Scrolling':145,
-  'OCR & Handwriting Failures':95
-};
-const examples={
-  'Keyword & Vocabulary Gap':[
-    'I remembered the feeling and the person in the photo, but every keyword I tried returned unrelated results.',
-    'I tried different words for the same object and still could not narrow the search to the picture I remembered.',
-    'The photo was clear in my head, but I could not describe it using the labels the search seemed to understand.'
-  ],
-  'Metadata Corruption':[
-    'I searched the month I remembered, then discovered the downloaded photo was stored under a completely different date.',
-    'The timeline search failed because the shared image used the download date instead of the event date.',
-    'I checked several nearby months before realising the photo metadata no longer matched when it was taken.'
-  ],
-  'Episodic/Context Blindness':[
-    'I remembered who I was with and what happened that day, but none of those details helped me retrieve the photo.',
-    'I could remember the small moment around the picture, not the exact place, object or date to search.',
-    'The memory was about an event and a feeling, which was difficult to turn into a searchable query.'
-  ],
-  'Thumbnail Fatigue & Endless Scrolling':[
-    'After search failed, I scrolled through months of thumbnails and repeatedly opened similar-looking photos.',
-    'I spent nearly an hour scanning the timeline because the search results were too broad to recognise the target.',
-    'The only fallback was manual scrolling, but hundreds of similar thumbnails made the photo difficult to spot.'
-  ],
-  'OCR & Handwriting Failures':[
-    'I remembered a word written on the note, but searching that text did not return the photo.',
-    'I tried the receipt title and store name, then manually checked document thumbnails when OCR found nothing.',
-    'The handwritten text was the strongest clue I remembered, but it was not recognised by search.'
-  ]
-};
+const familyByLabel={cue_availability:'Remembering and expressing clues',clue_expression:'Remembering and expressing clues',language_expression:'Remembering and expressing clues',cue_grounding_hypothesis:'Connecting memory to searchable evidence',search_quality_hypothesis:'Connecting memory to searchable evidence',unknown_indexing_state:'Connecting memory to searchable evidence',cue_discriminability:'Narrowing and correcting the search',incorrect_constraint:'Narrowing and correcting the search',temporal_narrowing:'Narrowing and correcting the search',activity_vs_capture_time:'Narrowing and correcting the search',query_reformulation:'Narrowing and correcting the search',iterative_reformulation:'Narrowing and correcting the search',relational_navigation:'Exploring and recognising candidates',candidate_recognition:'Exploring and recognising candidates',inspection_burden:'Exploring and recognising candidates',near_duplicate_ambiguity:'Exploring and recognising candidates',discoverability:'Exploring and recognising candidates',target_specificity:'Exploring and recognising candidates',account_scope:'Photo availability and library scope',availability_unknown:'Photo availability and library scope',cross_app_origin:'Photo availability and library scope',unknown:'Unknown / insufficient evidence'};
+const subtypeByLabel={cue_availability:'Cue availability',clue_expression:'Clue-expression difficulty',language_expression:'Language or wording mismatch',cue_grounding_hypothesis:'Cue-grounding gap',search_quality_hypothesis:'Clear visual clue but no matching result',unknown_indexing_state:'Unknown indexing or matching state',cue_discriminability:'Low-discrimination clue',incorrect_constraint:'Incorrect constraint',temporal_narrowing:'Temporal narrowing difficulty',activity_vs_capture_time:'Activity time versus capture time',query_reformulation:'Query-reformulation difficulty',iterative_reformulation:'Query-reformulation difficulty',relational_navigation:'Relational navigation',candidate_recognition:'Candidate-recognition difficulty',inspection_burden:'Inspection burden',near_duplicate_ambiguity:'Near-duplicate ambiguity',discoverability:'Feature or capability discoverability',target_specificity:'Candidate-recognition difficulty',account_scope:'Wrong Google account',availability_unknown:'Availability unknown',cross_app_origin:'Stored or received through another application',unknown:'Unknown / insufficient evidence'};
+const hindiWords=/\b(yaar|mujhe|chahiye|tha|thi|kaam|yeh|yaad|nahi|bas|mili|lag raha|hata diya|kiya|mein|wali|wala|pata|kaise|purani|aaj|kal|woh|phir|poori|karni|padi|hai|kahan|kaunse|kisi|dekha|dekhi|gaya|gayi)\b/g;
+const pretty=value=>value.replaceAll('_',' ').replace(/\b\w/g,letter=>letter.toUpperCase());
 
-const counts=Object.fromEntries(Object.keys(targets).map(k=>[k,original.filter(r=>r.category===k).length]));
-const augmented=[];
-let index=1;
-for(const [category,target] of Object.entries(targets)){
-  const needed=target-(counts[category]||0);
-  for(let i=0;i<needed;i++){
-    const variants=examples[category];
-    augmented.push({
-      id:`A${String(index++).padStart(3,'0')}`,
-      platform:['Google Photos','Apple Photos','Android Gallery','Reddit'][i%4],
-      appSystem:['Android','iOS','Web'][i%3],
-      category,
-      text:variants[i%variants.length],
-      sourceUrl:'',
-      origin:'synthetic-augmentation'
-    });
-  }
-}
+function behaviour(primary,secondary,journey){const text=`${primary} ${secondary} ${journey}`.toLowerCase();if(/progressive_recall|recall detail/.test(text))return 'Progressive recall';if(/iterative_reformulation|refine|remove year|change query/.test(text))return 'Iterative reformulation';if(/scroll/.test(text))return 'Manual scrolling';if(/anchor|nearby photo|around that/.test(text))return 'Anchor-photo navigation';if(/switch account|different account/.test(text))return 'Account switching';if(/other app|cross.app|whatsapp|telegram/.test(text))return 'Cross-app search';if(/no attempt/.test(text))return 'No attempt';if(/search|query/.test(text))return 'One-shot search';return 'Unknown';}
+function normaliseOutcome(value){return ({found_exact:'Exact photo found',substitute_used:'Substitute used',found_elsewhere:'Found outside Google Photos',unconfirmed_match:'Unconfirmed match',abandoned:'Abandoned',unresolved:'Unresolved','not stated':'Unknown'})[value]||'Unknown';}
+function normaliseAvailability(value){return ({present_user_report:'Confirmed present',different_account:'Different account',external_app_found_photos_unknown:'External application',possibly_deleted:'Possibly deleted',possibly_not_backed_up:'Possibly not backed up',unknown:'Unknown'})[value]||'Unknown';}
 
-const corpus=[...original,...augmented];
-if(corpus.length!==800) throw new Error(`Expected 800 records, got ${corpus.length}`);
-fs.writeFileSync(path.join(root,'data','corpus-800.json'),JSON.stringify(corpus,null,2));
-console.log(`Built ${corpus.length}-record corpus`);
+const records=raw.map((r,index)=>{const primary=r[19]?.trim()||'unknown';const secondary=r[20]?.trim()||'none';const userText=r[4]?.trim()||'';const behaviourLabel=behaviour(primary,secondary,r[12]||'');let label=primary;if(['progressive_recall','successful_workaround'].includes(primary))label=secondary!=='none'?secondary:(behaviourLabel==='Manual scrolling'?'inspection_burden':'query_reformulation');if(primary==='successful_retrieval')label='no_failure';const family=label==='no_failure'?'No primary failure observed':(familyByLabel[label]||'Unknown / insufficient evidence');const subtype=label==='no_failure'?'Successful retrieval with available clues':(subtypeByLabel[label]||pretty(label));const confidence=(label==='unknown'||label==='unknown_indexing_state')?'Low':(/hypothesis|availability_unknown/.test(label)?'Medium':'High');const matches=userText.toLowerCase().match(hindiWords)||[];return {id:`REC-${String(index+1).padStart(3,'0')}`,sourceStyle:(r[2]||'Research account').replace(/\s*\(\)\s*$/,''),language:matches.length>=3?'Hinglish':'English',userText,contentType:r[5],targetPhoto:r[6],retrievalPurpose:r[7],rememberedClues:r[8],explicitlyForgotten:r[9],memoryConfidence:r[10],queriesInOrder:r[11],journey:r[12],observedProblemOrSuccess:r[13],workaround:r[14],outcome:normaliseOutcome(r[15]),targetAvailability:normaliseAvailability(r[16]),scope:r[17],scenarioPattern:r[18],expectedPrimaryTaxonomy:primary,expectedSecondaryTaxonomy:secondary,primaryProblemFamily:family,problemSubtype:subtype,retrievalBehaviour:behaviourLabel,classificationConfidence:confidence,interpretationLimit:r[21]||'Not stated.'};});
+const languages=records.reduce((acc,row)=>(acc[row.language]=(acc[row.language]||0)+1,acc),{});if(languages.English!==150||languages.Hinglish!==150)throw new Error(`Language detection mismatch: ${JSON.stringify(languages)}`);fs.writeFileSync(path.join(root,'data','corpus-300.json'),JSON.stringify(records,null,2));console.log(`Built ${records.length}-record corpus (${languages.English} English, ${languages.Hinglish} Hinglish)`);

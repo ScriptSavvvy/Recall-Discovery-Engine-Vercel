@@ -1,47 +1,42 @@
-# Recall — Photo Retrieval Discovery Engine
+# Recall — AI-Powered Photo Retrieval Discovery Engine
 
-A Vercel-ready Product Management research prototype for analysing why people struggle to retrieve a specific remembered photo when their memory is incomplete.
+A Vercel-ready internal PM research prototype for analysing remembered-photo retrieval episodes. It separates observed account evidence from engine inference, supports side-by-side problem comparison, and preserves unknowns instead of forcing classifications.
 
-## What it includes
+## Research corpus
 
-- An 800-record prototype analysis corpus
-- Five proposed retrieval-friction themes
-- Source-linked Evidence Explorer with search and filters
-- Discoverability insight cards with supporting records
-- Eight suggested research questions
-- Server-side research synthesis API
-- Staged retrieval, analysis and synthesis animation
-- Responsive dark dashboard
+The application analyses 300 structured photo-retrieval accounts: 150 English and 150 Hinglish. Results are directional and should not be treated as prevalence estimates.
 
-## Data model
+## Product sections
 
-The generated corpus is stored in `data/corpus-800.json`. Each record includes:
+- Research overview with deterministic corpus distributions
+- Side-by-side comparison of five primary problem families
+- Retrieval journey explorer with nine filters and full record drill-down
+- Dataset-grounded research assistant with eight curated questions
+- Evidence-to-opportunity view that preserves uncertainties and next research needs
 
-- `id`
-- `platform`
-- `appSystem`
-- `category`
-- `text`
-- `sourceUrl`
-- `origin`
+## Research model
 
-The `origin` field keeps source-linked evidence distinguishable from synthetic augmentation in the backend. Only source-linked records are returned by the Evidence Explorer and supporting-evidence APIs.
+`Target photo → retrieval purpose → remembered clues → forgotten information → actions/searches → observed difficulty → workaround → outcome`
+
+Observed fields, inferred classifications, and interpretation limitations are shown separately.
 
 ## Architecture
 
 ```text
-CSV seed data
+data/corpus.csv
    ↓
 scripts/build-corpus.mjs
    ↓
-data/corpus-800.json
+data/corpus-300.json
    ↓
-Next.js server routes
+Next.js route handlers
    ├── GET  /api/evidence
    └── POST /api/research
    ↓
-Interactive research dashboard
+Interactive research workspace
 ```
+
+Counts, percentages, rates, cross-tabs, and filtering are deterministic. The research endpoint performs dataset-bounded selection and synthesis and refuses unrelated questions.
 
 ## Run locally
 
@@ -50,22 +45,18 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open `http://localhost:3000`.
 
 ## Production build
 
 ```bash
 npm run build
-npm start
 ```
-
-The build command regenerates the 800-record corpus before compiling the Next.js application.
 
 ## Deploy to Vercel
 
-1. Push this folder to GitHub, GitLab or Bitbucket.
-2. Import the repository into Vercel.
-3. Keep the detected framework as **Next.js**.
-4. Deploy without additional environment variables.
+```bash
+npx vercel --prod
+```
 
-The app currently uses deterministic server-side synthesis, so no paid AI API is required.
+Keep Vercel's detected Next.js defaults. Do not override the Build Command, Development Command, or Output Directory. No environment variables or paid APIs are required.

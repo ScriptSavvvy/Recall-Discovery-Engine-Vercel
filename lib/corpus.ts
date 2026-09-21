@@ -1,30 +1,14 @@
-import corpus from '@/data/corpus-800.json';
+import corpus from '@/data/corpus-300.json';
 
-export type ResearchRecord={
-  id:string;
-  platform:string;
-  appSystem:string;
-  category:string;
-  text:string;
-  sourceUrl:string;
-  origin:'source-linked'|'synthetic-showcase'|'synthetic-augmentation';
-};
-
+export type ResearchRecord={id:string;sourceStyle:string;language:string;userText:string;contentType:string;targetPhoto:string;retrievalPurpose:string;rememberedClues:string;explicitlyForgotten:string;memoryConfidence:string;queriesInOrder:string;journey:string;observedProblemOrSuccess:string;workaround:string;outcome:string;targetAvailability:string;scope:string;scenarioPattern:string;expectedPrimaryTaxonomy:string;expectedSecondaryTaxonomy:string;primaryProblemFamily:string;problemSubtype:string;retrievalBehaviour:string;classificationConfidence:string;interpretationLimit:string};
 export const records=corpus as ResearchRecord[];
-export const sourceEvidence=records.filter(record=>record.origin==='source-linked'&&record.sourceUrl);
-export const categories=[
-  'Keyword & Vocabulary Gap',
-  'Episodic/Context Blindness',
-  'Thumbnail Fatigue & Endless Scrolling',
-  'Metadata Corruption',
-  'OCR & Handwriting Failures'
-];
+export const families=['Remembering and expressing clues','Connecting memory to searchable evidence','Narrowing and correcting the search','Exploring and recognising candidates','Photo availability and library scope'];
+export const familyColors:Record<string,string>={'Remembering and expressing clues':'#ff709f','Connecting memory to searchable evidence':'#43e6f2','Narrowing and correcting the search':'#ffc56f','Exploring and recognising candidates':'#b098ff','Photo availability and library scope':'#72eab3','Unknown / insufficient evidence':'#8fa0b8','No primary failure observed':'#eef3fa'};
+export const familyShort:Record<string,string>={'Remembering and expressing clues':'Expressing clues','Connecting memory to searchable evidence':'Grounding memory','Narrowing and correcting the search':'Narrowing search','Exploring and recognising candidates':'Recognising candidates','Photo availability and library scope':'Library scope','Unknown / insufficient evidence':'Insufficient evidence','No primary failure observed':'No failure observed'};
 
-export function themeFor(question:string){
-  const text=question.toLowerCase();
-  if(/scroll|journey|first search|fails/.test(text))return 'Thumbnail Fatigue & Endless Scrolling';
-  if(/date|metadata|timeline/.test(text))return 'Metadata Corruption';
-  if(/receipt|handwrit|text|ocr/.test(text))return 'OCR & Handwriting Failures';
-  if(/vocabulary|keyword|words|express/.test(text))return 'Keyword & Vocabulary Gap';
-  return 'Episodic/Context Blindness';
-}
+export function counts(rows:ResearchRecord[],key:keyof ResearchRecord){return Object.entries(rows.reduce<Record<string,number>>((acc,row)=>(acc[String(row[key])]=(acc[String(row[key])]||0)+1,acc),{})).sort((a,b)=>b[1]-a[1]);}
+export function rate(rows:ResearchRecord[],outcome:string){return rows.length?Math.round(rows.filter(row=>row.outcome===outcome).length/rows.length*100):0;}
+export function familyStats(family:string){const subset=records.filter(row=>row.primaryProblemFamily===family);return {family,count:subset.length,share:Math.round(subset.length/records.length*100),success:rate(subset,'Exact photo found'),abandonment:rate(subset,'Abandoned'),subtypes:counts(subset,'problemSubtype').slice(0,3),clues:subset.slice(0,3).map(row=>row.rememberedClues),forgotten:counts(subset,'explicitlyForgotten').slice(0,3),behaviours:counts(subset,'retrievalBehaviour').slice(0,3),workarounds:subset.filter(row=>row.workaround&&row.workaround!=='not needed').slice(0,3).map(row=>row.workaround),content:counts(subset,'contentType').slice(0,4),languages:counts(subset,'language'),confidence:counts(subset,'classificationConfidence')};}
+
+const stop=new Set(['what','when','where','which','with','from','that','this','these','those','users','user','photo','photos','retrieval','dataset','does','most','more','than','into','they','their','have','cannot','remember','information','current']);
+export function relevantRecords(question:string){const q=question.toLowerCase();let subset=records;if(/hinglish|english|language/.test(q))subset=records;if(/abandon/.test(q))subset=records.filter(row=>row.outcome==='Abandoned');else if(/exact.photo success|success rate|highest exact/.test(q))subset=records.filter(row=>row.outcome==='Exact photo found');else if(/new clues|emerge|progressive/.test(q))subset=records.filter(row=>row.retrievalBehaviour==='Progressive recall');else if(/cannot remember the date|forgot.*date/.test(q))subset=records.filter(row=>row.explicitlyForgotten.toLowerCase().includes('date'));else if(/do not fit|don't fit|insufficient|unknown/.test(q))subset=records.filter(row=>row.primaryProblemFamily==='Unknown / insufficient evidence');else {const terms=q.match(/[a-z]{4,}/g)?.filter(term=>!stop.has(term))||[];const scored=records.map(row=>({row,score:terms.reduce((score,term)=>score+(`${row.userText} ${row.primaryProblemFamily} ${row.problemSubtype} ${row.retrievalBehaviour} ${row.outcome}`.toLowerCase().includes(term)?1:0),0)})).filter(item=>item.score>0).sort((a,b)=>b.score-a.score);if(scored.length)subset=scored.map(item=>item.row);}return subset;}
